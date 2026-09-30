@@ -1,0 +1,41 @@
+EO Inference Toolbox
+====================
+
+Copyright (c) 2026 Stuart Barclay.
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU General Public License as published by the Free Software
+Foundation, either version 2 of the License, or (at your option) any later
+version. See the LICENSE file for the full text.
+
+Third-party models and data
+----------------------------
+
+This plugin does not bundle any model weights or imagery. It downloads them on
+demand at your request. Each carries its own licence and attribution terms,
+which are the user's responsibility to observe:
+
+* Clay v1.5 — Clay Foundation (a program of Renaissance Philanthropy).
+  Code and weights: Apache-2.0. Documentation: CC-BY.
+  Weights: Hugging Face "made-with-clay/Clay" (clay-v1.5.ckpt).
+
+* Prithvi-EO-2.0 — IBM + NASA.
+  Weights: Apache-2.0 (confirm per weight file). Distributed on Hugging Face
+  ("ibm-nasa-geospatial/Prithvi-EO-2.0-*"). Pre-trained on NASA Harmonized
+  Landsat-Sentinel (HLS) V2.
+
+* SatlasPretrain — Allen Institute for AI (AI2).
+  Checkpoints: ODC-BY. Distributed via the "satlaspretrain-models" package.
+  Note: SatlasPretrain (the models) is distinct from "Satlas", AI2's separately
+  published pre-computed thematic map products.
+
+Source imagery
+--------------
+
+* Sentinel-2 — Copernicus / European Union / ESA. Free, full and open access
+  under the Copernicus data licence.
+* Harmonized Landsat-Sentinel (HLS) — NASA. Public domain (US Government work);
+  observe any distributor terms.
+
+The authors of this plugin are not affiliated with the Clay Foundation, IBM,
+NASA, the Allen Institute for AI, ESA or the Copernicus programme.

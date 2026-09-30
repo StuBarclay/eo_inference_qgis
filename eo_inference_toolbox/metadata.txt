@@ -1,0 +1,141 @@
+[general]
+name=EO Inference Toolbox
+qgisMinimumVersion=3.34
+qgisMaximumVersion=4.99
+description=Run Earth-observation foundation models (Clay v1.5, Prithvi-EO-2.0, SatlasPretrain) over your own imagery to produce per-pixel embedding rasters, with a built-in similarity / change / classification workbench.
+about=EO Inference Toolbox turns satellite imagery into dense per-pixel embedding rasters by running open Earth-observation foundation models over imagery you supply or fetch from public STAC catalogues. Three inference backends are supported: Clay v1.5 (multi-sensor ViT+MAE, Apache-2.0), Prithvi-EO-2.0 (IBM/NASA multi-temporal ViT on 30 m HLS, Apache-2.0), and SatlasPretrain (Allen Institute Swin/ResNet backbones, ODC-BY). Outputs are L2-normalised so cosine similarity equals a dot product, and drop straight into the built-in similarity search, change/trajectory and supervised classification / clustering algorithms. PyTorch and the model weights are an OPT-IN tier detected at run time and downloaded on demand — they are never bundled with the plugin and never a hard dependency. Model weights and imagery are third-party and carry their own licences (see NOTICE).
+version=0.2.0
+author=Stuart Barclay
+email=stu_barclay@hotmail.com
+tracker=https://github.com/StuBarclay/eo_inference_qgis/issues
+repository=https://github.com/StuBarclay/eo_inference_qgis
+homepage=https://github.com/StuBarclay/eo_inference_qgis
+category=Analysis
+icon=icon.svg
+experimental=True
+deprecated=False
+hasProcessingProvider=yes
+tags=embeddings,foundation model,deep learning,clay,prithvi,satlas,satlaspretrain,remote sensing,machine learning,classification,change detection,similarity,sentinel-2,landsat,hls,raster,pytorch
+license=GPL-2.0-or-later
+changelog=0.2.0 (2026-09-29)
+    - Hardening + capability release. Every new feature is opt-in and default-off,
+      so default behaviour matches 0.1.0; each is backed by a guard or unit test.
+    - Larger AOIs / throughput: windowed streaming reads (peak memory tracks the
+      tile, not the scene), optional batched tile inference (batch size defaults
+      to 1), CPU-vs-CUDA torch install choice.
+    - Mosaic quality: optional bilinear token-grid upsampling and optional
+      cosine-taper overlap feathering (defaults nearest / uniform).
+    - Analytics: opt-in classification accuracy report (JSON sidecar with overall /
+      per-class metrics + confusion matrix), clustering auto-k silhouette sweep and
+      MiniBatchKMeans full-data path, STAC multi-scene composite, and resample-to-
+      match in Change (strict reject stays the default).
+    - Weights + robustness: SHA-256 weight verification, download progress and a
+      cache inspector; defensive model-API guards; reflectance-scale override;
+      removed the process-global autograd toggle; consolidated dependency handling.
+    - Backends: formalised pluggable registry (register_backend + lazy loader);
+      see docs/ADDING_A_BACKEND.md.
+    - Fix: the Clay backend status badge no longer stays "package: missing" after a
+      correct install — its import-name list wrongly required a non-existent top-level
+      "clay" module in addition to the real "claymodel" package.
+    - Fix: the Clay checkpoint is fetched from its real path "v1.5/clay-v1.5.ckpt"
+      (was a bare "clay-v1.5.ckpt", which 404s), so weight download and the first
+      Embed run now work. The file is ~5.2 GB.
+    - Fix: Fetch imagery (STAC) no longer fails with HTTP 400 when a start/end date
+      is given. A bare YYYY-MM-DD is promoted to an RFC 3339 timestamp (start
+      00:00:00Z, end 23:59:59Z), which Earth Search requires.
+    - Fix: the first Clay Embed run no longer crashes with
+      "FileNotFoundError: configs/metadata.yaml". Clay's metadata file is vendored
+      with the plugin and passed as an absolute path, and the checkpoint load pins
+      mask_ratio=0 / shuffle=False so the encoder keeps every patch in order.
+    - Clay now standardises each band as (DN - mean) / std using the per-sensor
+      statistics in the vendored metadata.yaml (as Clay's own embedding pipeline
+      does), instead of a fixed /10000 reflectance scale. The input-scale override
+      is kept as an optional pre-scale into DN units (default 1.0 = raw DN).
+    - Clay per-band wavelengths are now read from the vendored metadata.yaml
+      (single source of truth), and a new guard rejects an encoder token count that
+      cannot match the expected patch grid instead of scrambling the output. The
+      Sentinel-2 L2A baseline-04.00 BOA offset is documented as a known caveat.
+    - Satlas backend keeps all FPN levels via a single feature-map-sequence helper
+      (a guard against silently dropping every scale but the finest), guards the
+      batched per-tile split against non-batch-first maps, corrects the embedding-dim
+      hint to 512, and documents its true-colour 8-bit input convention.
+    - Prithvi now standardises each band as (DN - mean) / std using the HLS
+      statistics published in the model's config.json (as Prithvi's own preprocessing
+      does), instead of a fixed /10000 reflectance scale; the input-scale override is
+      kept as an optional pre-scale into DN units (default 1.0 = raw HLS DN). A guard
+      rejects a backbone token count or output rank that cannot match the expected
+      patch grid instead of scrambling the output, and the fixed six-band 30 m HLS
+      input and single-acquisition (time = 1) limitation are documented.
+    - Post-review hardening (all opt-in, default-off where behaviour changes): a
+      low-memory streaming mode for similarity/change/classify/cluster/RGB (the
+      whole-cube path stays the default); the Change align step fixed to
+      nearest-neighbour + nodata-aware; model load fails closed on corrupt/foreign
+      files with a documented pickle trust boundary; and GUI guards against
+      concurrent installs and callbacks into a closed dialog.
+    - Roadmap follow-ups (all pure-core-tested; output-changing parts opt-in): (1)
+      analytics now auto-select the low-memory streamed path when a raster's
+      pixel x band footprint would exceed a memory budget (advanced "Auto low-memory"
+      + budget params, default 1024 MB), lifting the RAM ceiling without ticking a
+      box - on by default only where streaming is byte-identical (similarity / change
+      / classify), opt-in for cluster / RGB whose fit changes; (2) a trained classify
+      model is now a small zip container with plain-JSON provenance + a separate
+      estimator member, stored via skops through a trusted-types gate when skops is
+      installed (pickle otherwise), shrinking the load-time trust boundary - legacy
+      pickles still load; (3) byte-identical parity tests added for the streamed
+      classify / cluster / RGB apply paths alongside similarity / change.
+    - Fix: Embed now fails up front with a clear, backend-aware message when the
+      imagery's bands do not match the selected backend's fixed requirement - for
+      example 3-band RGB imagery (Satlas's default set) sent to Prithvi, which needs
+      six HLS bands. The message names the imagery's bands, the backend's requirement
+      in order, and the backend whose defaults match the imagery, instead of the
+      model's low-level "Prithvi needs exactly 6 bands ..., got 3".
+    - Fix: when an optional model package fails to import at Embed time, the error now
+      distinguishes a genuinely missing package (install it) from one that is installed
+      but fails to import (a broken/incompatible dependency, where reinstalling will not
+      help), and always includes the underlying import error. Previously Prithvi, Clay
+      and Satlas always said "install it", masking a broken install behind a misleading
+      message even when the import had run for a long time before failing. When that
+      underlying error is a Windows native-DLL load failure, the message now adds a hint
+      that the likely cause is a native-library version clash with QGIS (e.g. an HDF5 or
+      GDAL build mismatch) that no Python-package reinstall can fix; a full worked example
+      (Prithvi/TerraTorch's h5py-vs-QGIS-HDF5 clash and its fix) is in docs/USER_GUIDE.md.
+    - Third deep review (2026-09-30), safe fixes only: similarity's reference vector
+      now drops points on nodata/non-finite pixels (errors if none remain); embedding
+      writes never leak NaN/Inf (non-finite pixels become nodata + drop from coverage);
+      cosine similarity clamped to [-1,1] and cosine change distance to [0,2]; Satlas
+      rejects a local weights checkpoint with a clear message; Clay/Satlas construction
+      and Prithvi's local-checkpoint path fail with actionable errors; bilinear
+      upsampling preserves float32 (was doubling memory); fetch imagery uses a sane
+      degree pixel size in geographic CRSs; write/warp remove a half-written GeoTIFF on
+      failure; __version__ trued to 0.2.0 with a drift test; docs corrected to match the
+      code.
+    - Third-review backlog now implemented (2026-09-30), same opt-in / guard-tested
+      pattern: Embed honours a declared input nodata by DEFAULT (off-scene / nodata
+      pixels are imputed out of the forward pass and written as nodata, not embedded as
+      real ground), with opt-in all-zero void detection (default off) for rotated-scene
+      black corners - byte-identical on a clean scene; the Satlas backend loads a local
+      .pth checkpoint (architecture looked up from the SatlasPretrain catalogue, state
+      dict loaded through the same Model builder as the download path) with a fail-loud
+      channel-count guard; and a forward-compat CI job runs the gated tests on the QGIS
+      4 / Qt6 nightly (non-blocking, Qt-major assertion). Minor items closed too:
+      mean_embedding opt-in nodata mode (default = plain mean), fit_pca rejects
+      non-finite input, classify's model load wraps errors as QgsProcessingException,
+      and partial-nodata / bbox locality / tile-vs-patch-size / English-only UI /
+      driver-from-extension are documented.
+    - Satlas fetch now pulls Sentinel-2's pre-rendered 8-bit true-colour asset (the
+      "visual" / TCI COG: red/green/blue, 0-255) instead of raw reflectance bands, so
+      imagery fetched for SatlasPretrain matches its default RGB checkpoint and the
+      Embed default lands in ~[0, 1] with no manual "Input scale". Clay and Prithvi
+      still fetch per-band reflectance. A band-count guard rejects a fetched asset
+      that does not match the backend's band convention.
+    - Tests / CI: GDAL/QGIS container job + forward-compat QGIS 4 / Qt6 job;
+      fake-backend orchestration + registry conformance tests; 336 pure-core /
+      orchestration tests (2 skipped), four gates green.
+    0.1.0 (2026-09-28)
+    - Initial release. Processing provider "eoinfer" with seven algorithms:
+      fetch imagery (STAC), embed (run a backend -> per-pixel embedding raster),
+      embedding to RGB, similarity search, change / trajectory, classify, cluster.
+    - Three opt-in inference backends behind a common EmbeddingBackend protocol:
+      Clay v1.5, Prithvi-EO-2.0, SatlasPretrain. PyTorch + weights are detected
+      and installed on demand, never bundled.
+    - Tabbed wizard GUI; all long runs execute off the GUI thread.

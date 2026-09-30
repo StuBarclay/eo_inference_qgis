@@ -1,0 +1,97 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  # --- Gate job: lint, type-check and the pure-core test suite. ---------------
+  # Runs in a plain Python environment with no GDAL / QGIS / torch. The pure
+  # core is fully exercised here; the GDAL/QGIS-gated tests skip cleanly.
+  lint-and-test:
+    name: lint + mypy + pytest (pure core)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install tooling
+        run: python -m pip install --upgrade pip ruff mypy numpy pytest pyyaml
+
+      - name: Ruff (lint)
+        run: python -m ruff check .
+
+      - name: Ruff (format check)
+        run: python -m ruff format --check .
+
+      - name: mypy (strict)
+        run: python -m mypy
+
+      - name: pytest (pure core; GDAL/QGIS tests skip)
+        run: python -m pytest
+
+  # --- GDAL / QGIS job: run the gated tests where the libraries exist. --------
+  # Uses the official QGIS LTR image (PyQt5 / Qt5), which ships PyQGIS
+  # (qgis.core), GDAL (osgeo) and NumPy. The two importorskip-gated test files
+  # run here for real.
+  gdal-qgis:
+    name: gated tests (QGIS 3.34 LTR / Qt5 container)
+    runs-on: ubuntu-latest
+    container:
+      image: qgis/qgis:release-3_34
+    env:
+      QT_QPA_PLATFORM: offscreen
+      PIP_BREAK_SYSTEM_PACKAGES: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pytest into the QGIS Python
+        run: pip3 install pytest
+
+      - name: pytest (runs the GDAL + QGIS gated tests)
+        run: |
+          python3 -c "import qgis.core, osgeo.gdal, numpy; print('QGIS/GDAL/NumPy import OK')"
+          python3 -m pytest -v
+
+  # --- Forward-compat job: same gated tests on QGIS 4 / PyQt6 (Qt6). ----------
+  # QGIS 4.x is built against Qt6/PyQt6; the plugin imports Qt only through the
+  # binding-agnostic ``qgis.PyQt`` shim, so it should load unchanged. This job is
+  # an early warning that a future Qt6 build hasn't broken import or registration.
+  # It uses the rolling ``latest`` image (QGIS master = 4.x), so it is marked
+  # continue-on-error: a transient nightly breakage should not red the pipeline,
+  # but a real regression is still visible. The Qt-major assertion keeps the job
+  # honest — if ``latest`` ever isn't Qt6, this fails loudly so the tag is updated.
+  qgis4-qt6:
+    name: gated tests (QGIS 4 / Qt6, forward-compat)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    container:
+      image: qgis/qgis:latest
+    env:
+      QT_QPA_PLATFORM: offscreen
+      PIP_BREAK_SYSTEM_PACKAGES: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pytest into the QGIS Python
+        run: pip3 install pytest
+
+      - name: Confirm this really is a QGIS 4 / Qt6 build
+        run: |
+          python3 -c "from qgis.PyQt.QtCore import QT_VERSION_STR; import qgis.core; print('QGIS', qgis.core.Qgis.version(), 'Qt', QT_VERSION_STR); assert QT_VERSION_STR.split('.')[0] == '6', f'expected a Qt6 / QGIS 4 build, got Qt {QT_VERSION_STR}'"
+
+      - name: pytest (GDAL + QGIS gated tests under PyQt6)
+        run: |
+          python3 -c "import qgis.core, osgeo.gdal, numpy; print('QGIS/GDAL/NumPy import OK')"
+          python3 -m pytest -v

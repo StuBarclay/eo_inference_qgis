@@ -1,0 +1,88 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "eo-inference-toolbox"
+version = "0.2.0"
+description = "QGIS plugin: run Clay v1.5 / Prithvi-EO-2.0 / SatlasPretrain over your own imagery to produce per-pixel embedding rasters, with a similarity / change / classification workbench."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "GPL-2.0-or-later" }
+authors = [{ name = "Stuart Barclay" }]
+dependencies = []
+
+# Every heavy dependency is an OPT-IN tier, detected and installed at run time.
+# None of these are required to install or load the plugin. Per-backend model
+# packages (claymodel / terratorch / satlaspretrain-models) are intentionally not
+# listed here: they are large and/or git-sourced and installed from the wizard.
+[project.optional-dependencies]
+inference = ["torch", "numpy"]
+# skops lets classify persist its estimator without pickle, so a saved model can be
+# reloaded through skops' trusted-types gate instead of an arbitrary-code unpickle.
+# It is optional: without it, models fall back to pickle and still load.
+sklearn = ["scikit-learn", "skops"]
+# Weight auto-download (Clay checkpoint, and HF-hosted checkpoints generally).
+weights = ["huggingface_hub"]
+# STAC search itself uses only the standard library (urllib); signing HLS assets
+# from Planetary Computer needs this package.
+stac = ["planetary-computer"]
+dev = ["ruff", "mypy", "pytest", "numpy", "pyyaml"]
+
+[tool.setuptools]
+packages = ["eo_inference_toolbox"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "C4", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E501"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+files = ["eo_inference_toolbox", "tests", "scripts"]
+
+# Third-party packages without type stubs (or absent in the check environment).
+[[tool.mypy.overrides]]
+module = [
+    "qgis",
+    "qgis.*",
+    "processing",
+    "processing.*",
+    "osgeo",
+    "osgeo.*",
+    "torch",
+    "torch.*",
+    "torchvision.*",
+    "sklearn",
+    "sklearn.*",
+    "skops",
+    "skops.*",
+    "rasterio.*",
+    "uno",
+    "com.sun.star.*",
+]
+ignore_missing_imports = true
+
+# The QGIS-facing modules subclass untyped QGIS base classes and call untyped
+# QGIS/GDAL APIs, so relax a few strict rules there while keeping eocore strict.
+[[tool.mypy.overrides]]
+module = [
+    "eo_inference_toolbox.provider",
+    "eo_inference_toolbox.plugin",
+    "eo_inference_toolbox.algorithms.*",
+    "eo_inference_toolbox.gui.*",
+]
+disallow_subclassing_any = false
+disallow_untyped_calls = false
+warn_return_any = false
