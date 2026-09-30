@@ -9,8 +9,7 @@ __pycache__/
 .ruff_cache/
 .pytest_cache/
 
-# Build artifacts
-/dist/
+# Build artifacts: dist/ (the packaged plugin ZIP) is intentionally tracked, not ignored
 
 # Model weight caches (never committed)
 *.ckpt
@@ -19,4 +18,4 @@ __pycache__/
 
 # OS / editor cruft
 .DS_Store
-".idea/" 
+.idea/ 
